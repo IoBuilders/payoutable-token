@@ -1,15 +1,38 @@
 pragma solidity ^0.5.0;
 
 import "./IPayoutable.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
+import "eip1996/contracts/Holdable.sol";
 
+contract Payoutable is IPayoutable, Holdable {
 
-contract Payoutable is IPayoutable, ERC20 {
+    struct OrderedPayout {
+        PayoutStatusCode status;
+    }
 
+    mapping(bytes32 => OrderedPayout) private orderedPayouts;
     mapping(address => mapping(address => bool)) private payoutOperators;
+    address internal payoutAgent;
+
+    constructor() public {
+        payoutAgent = msg.sender;
+    }
 
     function orderPayout(string calldata operationId, uint256 value, string calldata instructions) external returns (bool) {
-        return true;
+        emit PayoutOrdered(
+            msg.sender,
+            operationId,
+            msg.sender,
+            value,
+            instructions
+        );
+
+        return _orderPayout(
+            msg.sender,
+            operationId,
+            msg.sender,
+            value,
+            instructions
+        );
     }
 
     function orderPayoutFrom(
@@ -19,7 +42,24 @@ contract Payoutable is IPayoutable, ERC20 {
         string calldata instructions
     ) external returns (bool)
     {
-        return true;
+        require(walletToBePaidOut != address(0), "walletToBePaidOut address must not be zero address");
+        require(payoutOperators[walletToBePaidOut][msg.sender], "This operator is not authorized");
+
+        emit PayoutOrdered(
+            msg.sender,
+            operationId,
+            walletToBePaidOut,
+            value,
+            instructions
+        );
+
+        return _orderPayout(
+            msg.sender,
+            operationId,
+            walletToBePaidOut,
+            value,
+            instructions
+        );
     }
 
     function cancelPayout(string calldata operationId) external returns (bool) {
@@ -70,5 +110,28 @@ contract Payoutable is IPayoutable, ERC20 {
         payoutOperators[msg.sender][operator] = false;
         emit RevokedPayoutOperator(operator, msg.sender);
         return true;
+    }
+
+    function _orderPayout(
+        address orderer,
+        string memory operationId,
+        address walletToBePaidOut,
+        uint256 value,
+        string memory instructions
+    ) internal returns (bool)
+    {
+        OrderedPayout storage newPayout = orderedPayouts[operationId.toHash()];
+
+        require(!instructions.isEmpty(), "Instructions must not be empty");
+
+        return _hold(
+            operationId,
+            orderer,
+            walletToBePaidOut,
+            address(0),
+            payoutAgent,
+            value,
+            0
+        );
     }
 }

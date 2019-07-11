@@ -35,7 +35,7 @@ interface IPayoutable {
     function revokePayoutOperator(address operator) external returns (bool);
     function isPayoutOperatorFor(address operator, address from) external view returns (bool);
 
-    event PayoutOrdered(address indexed orderer, string indexed operationId, address indexed walletToDebit, uint256 value, string instructions);
+    event PayoutOrdered(address indexed orderer, string operationId, address indexed walletToDebit, uint256 value, string instructions);
     event PayoutInProcess(address indexed orderer, string indexed operationId);
     event PayoutFundsInSuspense(address indexed orderer, string indexed operationId);
     event PayoutExecuted(address indexed orderer, string indexed operationId);

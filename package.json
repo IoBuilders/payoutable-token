@@ -4,7 +4,7 @@
   "description": "An extension to the ERC-20 standard token that allows Token wallet owners to request payout from their wallet, by calling the smart contract and attaching a payout instruction string.",
   "main": "truffle-config.js",
   "dependencies": {
-    "openzeppelin-solidity": "^2.3.0"
+    "eip1996": "^1.0.0"
   },
   "devDependencies": {
     "ethlint": "^1.2.4",
