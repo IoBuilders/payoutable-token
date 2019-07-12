@@ -6,21 +6,48 @@ const Payoutable = artifacts.require('PayoutableMock');
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const PAYOUT_INSTRUCTION = 'payout_instruction';
 
+const STATUS_ORDERED = 1;
+const STATUS_IN_PROCESS = 2;
+const STATUS_FUNDS_IN_SUSPENSE = 3;
+const STATUS_EXECUTED = 4;
+const STATUS_REJECTED = 5;
+const STATUS_CANCELLED = 6;
+
 contract('Payoutable', (accounts) => {
     let payoutable;
     let operationId;
 
-    const owner = accounts[0];
+    const payoutAgent = accounts[0];
     const from = accounts[1];
     const authorizedOperator = accounts[2];
     const unauthorizedOperator = accounts[3];
-    const userC = accounts[4];
+    const suspenseAccount = accounts[4];
 
     beforeEach(async() => {
-        payoutable = await Payoutable.new({from: owner});
+        payoutable = await Payoutable.new(suspenseAccount, {from: payoutAgent});
         await payoutable.mint(from, 3);
 
         operationId = randomString.generate();
+    });
+
+    describe('constructor', async() => {
+        it('should revert if suspense account is zero address', async() => {
+            await truffleAssert.reverts(
+                Payoutable.new(
+                    ZERO_ADDRESS,
+                    {from: payoutAgent}
+                ),
+                'Suspense account must not be the zero address'
+            );
+        });
+
+        it('should set the suspense account and the payout agent', async() => {
+            const suspenseAccountFromContract = await payoutable.suspenseAccount();
+            assert.strictEqual(suspenseAccountFromContract, suspenseAccount, 'Suspense account not set correctly');
+
+            const payoutAgentFromContract = await payoutable.payoutAgent();
+            assert.strictEqual(payoutAgentFromContract, payoutAgent, 'Payout agent not set correctly');
+        });
     });
 
     describe('orderPayout', async() => {
@@ -67,18 +94,31 @@ contract('Payoutable', (accounts) => {
             );
         });
 
-        it('should revert if value id greater than balance', async() => {
+        it('should revert if value is greater than balance', async() => {
             await truffleAssert.reverts(
                 payoutable.orderPayout(
                     operationId,
                     4,
                     PAYOUT_INSTRUCTION,
                     {from: from}
-                )
+                ),
+                'Amount of the hold can\'t be greater than the balance of the origin'
             );
         });
 
-        it('should successfully create a hold and emit a HoldCreated event', async() => {
+        it('should revert if the payout instruction is empty', async() => {
+            await truffleAssert.reverts(
+                payoutable.orderPayout(
+                    operationId,
+                    1,
+                    '',
+                    {from: from}
+                ),
+                'Instructions must not be empty'
+            );
+        });
+
+        it('should successfully order a payout and emit a PayoutOrdered event', async() => {
             const tx = await payoutable.orderPayout(
                 operationId,
                 1,
@@ -94,6 +134,16 @@ contract('Payoutable', (accounts) => {
                     _event.instructions === PAYOUT_INSTRUCTION
                     ;
             });
+
+            const orderedPayout = await payoutable.retrievePayoutData(operationId);
+
+            assert.strictEqual(orderedPayout.walletToDebit, from, 'walletToDebit not set correctly');
+            assert.strictEqual(orderedPayout.value.toNumber(), 1, 'value not set correctly');
+            assert.strictEqual(orderedPayout.instructions, PAYOUT_INSTRUCTION, 'instructions not set correctly');
+            assert.strictEqual(orderedPayout.status.toNumber(), STATUS_ORDERED, 'status not set to ordered');
+
+            const balanceOfFrom = await payoutable.balanceOf(from);
+            assert.strictEqual(balanceOfFrom.toNumber(), 2, 'Balance of payer not updated after ordering of payout');
         });
     });
 
@@ -173,7 +223,8 @@ contract('Payoutable', (accounts) => {
                     4,
                     PAYOUT_INSTRUCTION,
                     {from: authorizedOperator}
-                )
+                ),
+                'Amount of the hold can\'t be greater than the balance of the origin'
             );
         });
 
@@ -185,11 +236,25 @@ contract('Payoutable', (accounts) => {
                     1,
                     PAYOUT_INSTRUCTION,
                     {from: unauthorizedOperator}
-                )
+                ),
+                'This operator is not authorized'
             );
         });
 
-        it('should successfully create a hold and emit a HoldCreated event', async() => {
+        it('should revert if the payout instruction is empty', async() => {
+            await truffleAssert.reverts(
+                payoutable.orderPayoutFrom(
+                    operationId,
+                    from,
+                    1,
+                    '',
+                    {from: authorizedOperator}
+                ),
+                'Instructions must not be empty'
+            );
+        });
+
+        it('should successfully order a payout and emit a PayoutOrdered event', async() => {
             const tx = await payoutable.orderPayoutFrom(
                 operationId,
                 from,
@@ -206,6 +271,333 @@ contract('Payoutable', (accounts) => {
                     _event.instructions === PAYOUT_INSTRUCTION
                 ;
             });
+
+            const orderedPayout = await payoutable.retrievePayoutData(operationId);
+
+            assert.strictEqual(orderedPayout.walletToDebit, from, 'walletToDebit not set correctly');
+            assert.strictEqual(orderedPayout.value.toNumber(), 1, 'value not set correctly');
+            assert.strictEqual(orderedPayout.instructions, PAYOUT_INSTRUCTION, 'instructions not set correctly');
+            assert.strictEqual(orderedPayout.status.toNumber(), STATUS_ORDERED, 'status not set to ordered');
+
+            const balanceOfFrom = await payoutable.balanceOf(from);
+            assert.strictEqual(balanceOfFrom.toNumber(), 2, 'Balance of payer not updated after ordering of payout');
+        });
+    });
+
+    describe('cancelPayout', async() => {
+        beforeEach(async() => {
+            await payoutable.authorizePayoutOperator(
+                authorizedOperator,
+                {from: from}
+            );
+
+            await payoutable.orderPayoutFrom(
+                operationId,
+                from,
+                1,
+                PAYOUT_INSTRUCTION,
+                {from: authorizedOperator}
+            );
+        });
+
+        it('should revert if a non existing operation id is used', async() => {
+            await truffleAssert.reverts(
+                payoutable.cancelPayout(
+                    randomString.generate(),
+                    {from: from}
+                ),
+                'A payout can only be cancelled in status Ordered'
+            );
+        });
+
+        it('should revert if the contract payout agent calls it', async() => {
+            await truffleAssert.reverts(
+                payoutable.cancelPayout(
+                    operationId,
+                    {from: payoutAgent}
+                ),
+                'A payout can only be cancelled by the orderer or the walletToBePaidOut'
+            );
+        });
+
+        it('should cancel the payout and emit a PayoutCancelled event if called by walletToBePaidOut', async() => {
+            const tx = await payoutable.cancelPayout(
+                operationId,
+                {from: from}
+            );
+
+            truffleAssert.eventEmitted(tx, 'PayoutCancelled', (_event) => {
+                return _event.orderer === authorizedOperator && _event.operationId === operationId;
+            });
+
+            const cancelledPayout = await payoutable.retrievePayoutData(operationId);
+
+            assert.strictEqual(cancelledPayout.walletToDebit, from, 'walletToDebit not set correctly');
+            assert.strictEqual(cancelledPayout.value.toNumber(), 1, 'value not set correctly');
+            assert.strictEqual(cancelledPayout.instructions, PAYOUT_INSTRUCTION, 'instructions not set correctly');
+            assert.strictEqual(cancelledPayout.status.toNumber(), STATUS_CANCELLED, 'status not set to cancelled');
+
+            const balanceOfFrom = await payoutable.balanceOf(from);
+            assert.strictEqual(balanceOfFrom.toNumber(), 3, 'Balance of payer not updated after cancellation');
+
+        });
+
+        it('should cancel the payout and emit a PayoutCancelled event if called by the issuer', async() => {
+            const tx = await payoutable.cancelPayout(
+                operationId,
+                {from: authorizedOperator}
+            );
+
+            truffleAssert.eventEmitted(tx, 'PayoutCancelled', (_event) => {
+                return _event.orderer === authorizedOperator && _event.operationId === operationId;
+            });
+
+            const cancelledPayout = await payoutable.retrievePayoutData(operationId);
+
+            assert.strictEqual(cancelledPayout.walletToDebit, from, 'walletToDebit not set correctly');
+            assert.strictEqual(cancelledPayout.value.toNumber(), 1, 'value not set correctly');
+            assert.strictEqual(cancelledPayout.instructions, PAYOUT_INSTRUCTION, 'instructions not set correctly');
+            assert.strictEqual(cancelledPayout.status.toNumber(), STATUS_CANCELLED, 'status not set to cancelled');
+
+            const balanceOfFrom = await payoutable.balanceOf(from);
+            assert.strictEqual(balanceOfFrom.toNumber(), 3, 'Balance of payer not updated after cancellation');
+        });
+
+        it('should revert if the contract payout is in status in progress', async() => {
+            await payoutable.cancelPayout(
+                operationId,
+                {from: from}
+            );
+
+            await truffleAssert.reverts(
+                payoutable.cancelPayout(
+                    operationId,
+                    {from: from}
+                ),
+                'A payout can only be cancelled in status Ordered'
+            );
+        });
+    });
+
+    describe('processPayout', async() => {
+        it('should always revert', async() => {
+            await payoutable.orderPayout(
+                operationId,
+                1,
+                PAYOUT_INSTRUCTION,
+                {from: from}
+            );
+
+            await truffleAssert.reverts(
+                payoutable.processPayout(
+                    operationId,
+                    {from: payoutAgent}
+                ),
+                'Function not supported in this implementation'
+            );
+        });
+    });
+
+    describe('putFundsInSuspenseInPayout', async() => {
+        it('should always revert', async() => {
+            await payoutable.orderPayout(
+                operationId,
+                1,
+                PAYOUT_INSTRUCTION,
+                {from: from}
+            );
+
+            await truffleAssert.reverts(
+                payoutable.putFundsInSuspenseInPayout(
+                    operationId,
+                    {from: payoutAgent}
+                ),
+                'Function not supported in this implementation'
+            );
+        });
+    });
+
+    describe('processPayoutToSuspenseAccount', async() => {
+        beforeEach(async() => {
+            await payoutable.authorizePayoutOperator(
+                authorizedOperator,
+                {from: from}
+            );
+
+            await payoutable.orderPayoutFrom(
+                operationId,
+                from,
+                1,
+                PAYOUT_INSTRUCTION,
+                {from: authorizedOperator}
+            );
+        });
+
+        it('should revert if a non existing operation id is used', async() => {
+            await truffleAssert.reverts(
+                payoutable.transferPayoutToSuspenseAccount(
+                    randomString.generate(),
+                    {from: payoutAgent}
+                ),
+                'A payout can only be set to FundsInSuspense from status Ordered'
+            );
+        });
+
+        it('should revert if a payout is cancelled', async() => {
+            await payoutable.cancelPayout(
+                operationId,
+                {from: authorizedOperator}
+            );
+
+            await truffleAssert.reverts(
+                payoutable.transferPayoutToSuspenseAccount(
+                    operationId,
+                    {from: payoutAgent}
+                ),
+                'A payout can only be set to FundsInSuspense from status Ordered'
+            );
+        });
+
+        it('should revert if called by the orderer', async() => {
+            await truffleAssert.reverts(
+                payoutable.transferPayoutToSuspenseAccount(
+                    operationId,
+                    {from: authorizedOperator}
+                ),
+                'A payout can only be set to in suspense by the payout agent'
+            );
+        });
+
+        it('should revert if called by walletToBePaidOut', async() => {
+            await truffleAssert.reverts(
+                payoutable.transferPayoutToSuspenseAccount(
+                    operationId,
+                    {from: from}
+                ),
+                'A payout can only be set to in suspense by the payout agent'
+            );
+        });
+
+        it('should set the payout to status FundsInSuspense and emit a PayoutFundsInSuspense event if called by the payout agent', async() => {
+            const tx = await payoutable.transferPayoutToSuspenseAccount(
+                operationId,
+                {from: payoutAgent}
+            );
+
+            truffleAssert.eventEmitted(tx, 'PayoutFundsInSuspense', (_event) => {
+                return _event.orderer === authorizedOperator && _event.operationId === operationId;
+            });
+
+            const inProcessPayout = await payoutable.retrievePayoutData(operationId);
+
+            assert.strictEqual(inProcessPayout.walletToDebit, from, 'walletToDebit not set correctly');
+            assert.strictEqual(inProcessPayout.value.toNumber(), 1, 'value not set correctly');
+            assert.strictEqual(inProcessPayout.instructions, PAYOUT_INSTRUCTION, 'instructions not set correctly');
+            assert.strictEqual(inProcessPayout.status.toNumber(), STATUS_FUNDS_IN_SUSPENSE, 'status not set to in suspense');
+
+            const balanceOfFrom = await payoutable.balanceOf(from);
+            assert.strictEqual(balanceOfFrom.toNumber(), 2, 'Balance of walletToBePaidOut not updated after transfer to suspense account');
+
+            const balanceOfSuspenseAccount = await payoutable.balanceOf(suspenseAccount);
+            assert.strictEqual(balanceOfSuspenseAccount.toNumber(), 1, 'Balance of suspense account not updated');
+        });
+    });
+
+    describe('executePayout', async() => {
+        beforeEach(async () => {
+            await payoutable.authorizePayoutOperator(
+                authorizedOperator,
+                {from: from}
+            );
+
+            await payoutable.orderPayoutFrom(
+                operationId,
+                from,
+                1,
+                PAYOUT_INSTRUCTION,
+                {from: authorizedOperator}
+            );
+        });
+
+        it('should revert if a non existing operation id is used', async() => {
+            await truffleAssert.reverts(
+                payoutable.executePayout(
+                    randomString.generate(),
+                    {from: payoutAgent}
+                ),
+                'A payout can only be executed from status FundsInSuspense'
+            );
+        });
+
+        it('should revert if a payout is cancelled', async() => {
+            await payoutable.cancelPayout(
+                operationId,
+                {from: authorizedOperator}
+            );
+
+            await truffleAssert.reverts(
+                payoutable.executePayout(
+                    operationId,
+                    {from: payoutAgent}
+                ),
+                'A payout can only be executed from status FundsInSuspense'
+            );
+        });
+
+        it('should revert if called by the orderer', async() => {
+            await payoutable.transferPayoutToSuspenseAccount(
+                operationId,
+                {from: payoutAgent}
+            );
+
+            await truffleAssert.reverts(
+                payoutable.executePayout(
+                    operationId,
+                    {from: authorizedOperator}
+                ),
+                'A payout can only be executed by the payout agent'
+            );
+        });
+
+        it('should revert if called by walletToBePaidOut', async() => {
+            await payoutable.transferPayoutToSuspenseAccount(
+                operationId,
+                {from: payoutAgent}
+            );
+
+            await truffleAssert.reverts(
+                payoutable.executePayout(
+                    operationId,
+                    {from: from}
+                ),
+                'A payout can only be executed by the payout agent'
+            );
+        });
+
+        it('should set the burn the tokens from the suspense account and emit a PayoutExecuted event if called by the payout agent', async() => {
+            await payoutable.transferPayoutToSuspenseAccount(
+                operationId,
+                {from: payoutAgent}
+            );
+
+            const tx = await payoutable.executePayout(
+                operationId,
+                {from: payoutAgent}
+            );
+
+            truffleAssert.eventEmitted(tx, 'PayoutExecuted', (_event) => {
+                return _event.orderer === authorizedOperator && _event.operationId === operationId;
+            });
+
+            const executedPayout = await payoutable.retrievePayoutData(operationId);
+
+            assert.strictEqual(executedPayout.walletToDebit, from, 'walletToDebit not set correctly');
+            assert.strictEqual(executedPayout.value.toNumber(), 1, 'value not set correctly');
+            assert.strictEqual(executedPayout.instructions, PAYOUT_INSTRUCTION, 'instructions not set correctly');
+            assert.strictEqual(executedPayout.status.toNumber(), STATUS_EXECUTED, 'status not set to executed');
+
+            const balanceOfSuspenseAccount = await payoutable.balanceOf(suspenseAccount);
+            assert.strictEqual(balanceOfSuspenseAccount.toNumber(), 0, 'Balance of suspense account not updated');
         });
     });
 

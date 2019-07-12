@@ -3,17 +3,23 @@ pragma solidity ^0.5.0;
 import "./IPayoutable.sol";
 import "eip1996/contracts/Holdable.sol";
 
+
 contract Payoutable is IPayoutable, Holdable {
 
     struct OrderedPayout {
+        string instructions;
         PayoutStatusCode status;
     }
 
     mapping(bytes32 => OrderedPayout) private orderedPayouts;
     mapping(address => mapping(address => bool)) private payoutOperators;
-    address internal payoutAgent;
+    address public payoutAgent;
+    address public suspenseAccount;
 
-    constructor() public {
+    constructor(address _suspenseAccount) public {
+        require(_suspenseAccount != address(0), "Suspense account must not be the zero address");
+        suspenseAccount = _suspenseAccount;
+
         payoutAgent = msg.sender;
     }
 
@@ -63,18 +69,71 @@ contract Payoutable is IPayoutable, Holdable {
     }
 
     function cancelPayout(string calldata operationId) external returns (bool) {
+        OrderedPayout storage cancelablePayout = orderedPayouts[operationId.toHash()];
+        Hold storage cancelableHold = holds[operationId.toHash()];
+
+        require(cancelablePayout.status == PayoutStatusCode.Ordered, "A payout can only be cancelled in status Ordered");
+        require(
+            msg.sender == cancelableHold.issuer || msg.sender == cancelableHold.origin,
+            "A payout can only be cancelled by the orderer or the walletToBePaidOut"
+        );
+
+        _releaseHold(operationId);
+
+        cancelablePayout.status = PayoutStatusCode.Cancelled;
+
+        emit PayoutCancelled(
+            cancelableHold.issuer,
+            operationId
+        );
+
         return true;
     }
 
     function processPayout(string calldata operationId) external returns (bool) {
-        return true;
+        revert("Function not supported in this implementation");
     }
 
     function putFundsInSuspenseInPayout(string calldata operationId) external returns (bool) {
+        revert("Function not supported in this implementation");
+    }
+
+    function transferPayoutToSuspenseAccount(string calldata operationId) external returns (bool) {
+        OrderedPayout storage inSuspensePayout = orderedPayouts[operationId.toHash()];
+        Hold storage inSuspenseHold = holds[operationId.toHash()];
+
+        require(inSuspensePayout.status == PayoutStatusCode.Ordered, "A payout can only be set to FundsInSuspense from status Ordered");
+        require(msg.sender == payoutAgent, "A payout can only be set to in suspense by the payout agent");
+
+        _setHoldToExecuted(operationId, inSuspenseHold.value);
+        _transfer(inSuspenseHold.origin, inSuspenseHold.target, inSuspenseHold.value);
+
+        inSuspensePayout.status = PayoutStatusCode.FundsInSuspense;
+
+        emit PayoutFundsInSuspense(
+            inSuspenseHold.issuer,
+            operationId
+        );
+
         return true;
     }
 
     function executePayout(string calldata operationId) external returns (bool) {
+        OrderedPayout storage executedPayout = orderedPayouts[operationId.toHash()];
+        Hold storage executedHold = holds[operationId.toHash()];
+
+        require(executedPayout.status == PayoutStatusCode.FundsInSuspense, "A payout can only be executed from status FundsInSuspense");
+        require(msg.sender == payoutAgent, "A payout can only be executed by the payout agent");
+
+        _burn(executedHold.target, executedHold.value);
+
+        executedPayout.status = PayoutStatusCode.Executed;
+
+        emit PayoutExecuted(
+            executedHold.issuer,
+            operationId
+        );
+
         return true;
     }
 
@@ -89,7 +148,15 @@ contract Payoutable is IPayoutable, Holdable {
         PayoutStatusCode status
     )
     {
+        OrderedPayout storage retrievedPayout = orderedPayouts[operationId.toHash()];
+        Hold storage retrievedHold = holds[operationId.toHash()];
 
+        return (
+            retrievedHold.origin,
+            retrievedHold.value,
+            retrievedPayout.instructions,
+            retrievedPayout.status
+        );
     }
 
     function isPayoutOperatorFor(address operator, address from) external view returns (bool) {
@@ -124,11 +191,14 @@ contract Payoutable is IPayoutable, Holdable {
 
         require(!instructions.isEmpty(), "Instructions must not be empty");
 
+        newPayout.instructions = instructions;
+        newPayout.status = PayoutStatusCode.Ordered;
+
         return _hold(
             operationId,
             orderer,
             walletToBePaidOut,
-            address(0),
+            suspenseAccount,
             payoutAgent,
             value,
             0
