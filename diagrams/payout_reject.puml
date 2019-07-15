@@ -1,0 +1,6 @@
+@startuml
+UserA -> "Payoutable Token": orderPayout
+"Payoutable Token" -> "Payout Agent": PayoutOrdered
+"Payout Agent" -> "Payoutable Token": rejectPayout
+"Payoutable Token" -> UserA: PayoutRejected
+@enduml

@@ -69,8 +69,10 @@ contract Payoutable is IPayoutable, Holdable {
     }
 
     function cancelPayout(string calldata operationId) external returns (bool) {
-        OrderedPayout storage cancelablePayout = orderedPayouts[operationId.toHash()];
-        Hold storage cancelableHold = holds[operationId.toHash()];
+        bytes32 operationIdHash = operationId.toHash();
+
+        OrderedPayout storage cancelablePayout = orderedPayouts[operationIdHash];
+        Hold storage cancelableHold = holds[operationIdHash];
 
         require(cancelablePayout.status == PayoutStatusCode.Ordered, "A payout can only be cancelled in status Ordered");
         require(
@@ -99,11 +101,14 @@ contract Payoutable is IPayoutable, Holdable {
     }
 
     function transferPayoutToSuspenseAccount(string calldata operationId) external returns (bool) {
-        OrderedPayout storage inSuspensePayout = orderedPayouts[operationId.toHash()];
-        Hold storage inSuspenseHold = holds[operationId.toHash()];
+        bytes32 operationIdHash = operationId.toHash();
+
+        OrderedPayout storage inSuspensePayout = orderedPayouts[operationIdHash];
 
         require(inSuspensePayout.status == PayoutStatusCode.Ordered, "A payout can only be set to FundsInSuspense from status Ordered");
         require(msg.sender == payoutAgent, "A payout can only be set to in suspense by the payout agent");
+
+        Hold storage inSuspenseHold = holds[operationIdHash];
 
         _setHoldToExecuted(operationId, inSuspenseHold.value);
         _transfer(inSuspenseHold.origin, inSuspenseHold.target, inSuspenseHold.value);
@@ -119,11 +124,14 @@ contract Payoutable is IPayoutable, Holdable {
     }
 
     function executePayout(string calldata operationId) external returns (bool) {
-        OrderedPayout storage executedPayout = orderedPayouts[operationId.toHash()];
-        Hold storage executedHold = holds[operationId.toHash()];
+        bytes32 operationIdHash = operationId.toHash();
+
+        OrderedPayout storage executedPayout = orderedPayouts[operationIdHash];
 
         require(executedPayout.status == PayoutStatusCode.FundsInSuspense, "A payout can only be executed from status FundsInSuspense");
         require(msg.sender == payoutAgent, "A payout can only be executed by the payout agent");
+
+        Hold storage executedHold = holds[operationIdHash];
 
         _burn(executedHold.target, executedHold.value);
 
@@ -138,6 +146,25 @@ contract Payoutable is IPayoutable, Holdable {
     }
 
     function rejectPayout(string calldata operationId, string calldata reason) external returns (bool) {
+        bytes32 operationIdHash = operationId.toHash();
+
+        OrderedPayout storage rejectedPayout = orderedPayouts[operationIdHash];
+
+        require(rejectedPayout.status == PayoutStatusCode.Ordered, "A payout can only be rejected from status Ordered");
+        require(msg.sender == payoutAgent, "A payout can only be rejected by the payout agent");
+
+        Hold storage rejectedHold = holds[operationIdHash];
+
+        _releaseHold(operationId);
+
+        rejectedPayout.status = PayoutStatusCode.Rejected;
+
+        emit PayoutRejected(
+            rejectedHold.issuer,
+            operationId,
+            reason
+        );
+
         return true;
     }
 
@@ -148,8 +175,10 @@ contract Payoutable is IPayoutable, Holdable {
         PayoutStatusCode status
     )
     {
-        OrderedPayout storage retrievedPayout = orderedPayouts[operationId.toHash()];
-        Hold storage retrievedHold = holds[operationId.toHash()];
+        bytes32 operationIdHash = operationId.toHash();
+
+        OrderedPayout storage retrievedPayout = orderedPayouts[operationIdHash];
+        Hold storage retrievedHold = holds[operationIdHash];
 
         return (
             retrievedHold.origin,
@@ -164,7 +193,7 @@ contract Payoutable is IPayoutable, Holdable {
     }
 
     function authorizePayoutOperator(address operator) external returns (bool) {
-        require (payoutOperators[msg.sender][operator] == false, "The operator is already authorized");
+        require(payoutOperators[msg.sender][operator] == false, "The operator is already authorized");
 
         payoutOperators[msg.sender][operator] = true;
         emit AuthorizedPayoutOperator(operator, msg.sender);
@@ -172,7 +201,7 @@ contract Payoutable is IPayoutable, Holdable {
     }
 
     function revokePayoutOperator(address operator) external returns (bool) {
-        require (payoutOperators[msg.sender][operator], "The operator is already not authorized");
+        require(payoutOperators[msg.sender][operator], "The operator is already not authorized");
 
         payoutOperators[msg.sender][operator] = false;
         emit RevokedPayoutOperator(operator, msg.sender);

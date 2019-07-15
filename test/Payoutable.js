@@ -7,7 +7,6 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const PAYOUT_INSTRUCTION = 'payout_instruction';
 
 const STATUS_ORDERED = 1;
-const STATUS_IN_PROCESS = 2;
 const STATUS_FUNDS_IN_SUSPENSE = 3;
 const STATUS_EXECUTED = 4;
 const STATUS_REJECTED = 5;
@@ -598,6 +597,114 @@ contract('Payoutable', (accounts) => {
 
             const balanceOfSuspenseAccount = await payoutable.balanceOf(suspenseAccount);
             assert.strictEqual(balanceOfSuspenseAccount.toNumber(), 0, 'Balance of suspense account not updated');
+        });
+    });
+
+    describe('rejectPayout', async() => {
+        let reason;
+
+        beforeEach(async () => {
+            await payoutable.authorizePayoutOperator(
+                authorizedOperator,
+                {from: from}
+            );
+
+            await payoutable.orderPayoutFrom(
+                operationId,
+                from,
+                1,
+                PAYOUT_INSTRUCTION,
+                {from: authorizedOperator}
+            );
+
+            reason = randomString.generate();
+        });
+
+        it('should revert if a non existing operation id is used', async() => {
+            await truffleAssert.reverts(
+                payoutable.rejectPayout(
+                    randomString.generate(),
+                    reason,
+                    {from: payoutAgent}
+                ),
+                'A payout can only be rejected from status Ordered'
+            );
+        });
+
+        it('should revert if a payout is cancelled', async() => {
+            await payoutable.cancelPayout(
+                operationId,
+                {from: authorizedOperator}
+            );
+
+            await truffleAssert.reverts(
+                payoutable.rejectPayout(
+                    operationId,
+                    reason,
+                    {from: payoutAgent}
+                ),
+                'A payout can only be rejected from status Ordered'
+            );
+        });
+
+        it('should revert if a payout is in status FundsInSuspense', async() => {
+            await payoutable.transferPayoutToSuspenseAccount(
+                operationId,
+                {from: payoutAgent}
+            );
+
+            await truffleAssert.reverts(
+                payoutable.rejectPayout(
+                    operationId,
+                    reason,
+                    {from: payoutAgent}
+                ),
+                'A payout can only be rejected from status Ordered'
+            );
+        });
+
+        it('should revert if called by the orderer', async() => {
+            await truffleAssert.reverts(
+                payoutable.rejectPayout(
+                    operationId,
+                    reason,
+                    {from: authorizedOperator}
+                ),
+                'A payout can only be rejected by the payout agent'
+            );
+        });
+
+        it('should revert if called by walletToBePaidOut', async() => {
+            await truffleAssert.reverts(
+                payoutable.rejectPayout(
+                    operationId,
+                    reason,
+                    {from: from}
+                ),
+                'A payout can only be rejected by the payout agent'
+            );
+        });
+
+        it('should set the payout to status Rejected and emit a PayoutRejected event if called by the payout agent', async() => {
+            const tx = await payoutable.rejectPayout(
+                operationId,
+                reason,
+                {from: payoutAgent}
+            );
+
+            truffleAssert.eventEmitted(tx, 'PayoutRejected', (_event) => {
+                return _event.orderer === authorizedOperator && _event.operationId === operationId && _event.reason === reason;
+            });
+
+            const inProcessPayout = await payoutable.retrievePayoutData(operationId);
+
+            assert.strictEqual(inProcessPayout.walletToDebit, from, 'walletToDebit not set correctly');
+            assert.strictEqual(inProcessPayout.value.toNumber(), 1, 'value not set correctly');
+            assert.strictEqual(inProcessPayout.instructions, PAYOUT_INSTRUCTION, 'instructions not set correctly');
+            assert.strictEqual(inProcessPayout.status.toNumber(), STATUS_REJECTED, 'status not set to rejected');
+
+            const balanceOfFrom = await payoutable.balanceOf(from);
+            assert.strictEqual(balanceOfFrom.toNumber(), 3, 'Balance of walletToBePaidOut not updated after rejected payout');
         });
     });
 

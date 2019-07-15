@@ -1,0 +1,12 @@
+@startuml
+[*] --> Ordered: PayoutOrdered
+Ordered --> InSuspense: PayoutFundsInSuspense
+Ordered: tokens of user are held and not available for transfer until payout is processed
+InSuspense : tokens are transferred to the suspense account
+InSuspense --> Executed: PayoutExecuted
+Executed: tokens are burnt from the suspense account and the transfer to the users bank account is done
+Ordered --> Cancelled: PayoutCancelled
+Cancelled: can only be called by the user
+Ordered --> Rejected: PayoutRejected
+Rejected: can only be called by the payout agent
+@enduml
