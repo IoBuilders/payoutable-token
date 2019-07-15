@@ -1,6 +1,10 @@
 # Payoutable Token
 
-This is the work in progress implementation of [EIP-2021 Payoutable token](https://github.com/ethereum/EIPs/pull/2021/files). This implementation will change over time with the standard and is not stable at the moment.
+[![Build Status](https://travis-ci.org/IoBuilders/payoutable-token.svg?branch=master)](https://travis-ci.org/IoBuilders/holdable-token)
+[![Coverage Status](https://coveralls.io/repos/github/IoBuilders/payoutable-token/badge.svg?branch=master)](https://coveralls.io/github/IoBuilders/holdable-token?branch=master)
+[![npm](https://img.shields.io/npm/v/eip2021.svg)](https://www.npmjs.com/package/eip2021)
+
+This is the reference implementation of [EIP-2021 Payoutable token](https://github.com/ethereum/EIPs/pull/2021/files). This implementation will change over time with the standard and is not stable at the moment.
 
 Feedback is appreciated and can given at [the discussion of the EIP](https://github.com/ethereum/EIPs/issues/2021).
 
@@ -27,7 +31,6 @@ The following diagram shows the sequence of the payout creation and execution.
 The following diagram shows the sequence of the payout creation and cancellation.
 
 ![Payoutable Token: Payout cancelled](http://www.plantuml.com/plantuml/png/SoWkIImgAStDuGejJYroLD2rKr0AIApCBor9JCf9LGZ9pqxDKx9Io2zAIIs2Y7DXoYFfKd1CJyqh0Ug0SFr1-b9Jy1kUd9YNd9f3XkdEO8qvGFCTKlDIW9u00000)
-
 
 ### Payout rejected
 
