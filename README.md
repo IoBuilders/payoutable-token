@@ -1,7 +1,7 @@
 # Payoutable Token
 
-[![Build Status](https://travis-ci.org/IoBuilders/payoutable-token.svg?branch=master)](https://travis-ci.org/IoBuilders/holdable-token)
-[![Coverage Status](https://coveralls.io/repos/github/IoBuilders/payoutable-token/badge.svg?branch=master)](https://coveralls.io/github/IoBuilders/holdable-token?branch=master)
+[![Build Status](https://travis-ci.org/IoBuilders/payoutable-token.svg?branch=master)](https://travis-ci.org/IoBuilders/payoutable-token)
+[![Coverage Status](https://coveralls.io/repos/github/IoBuilders/payoutable-token/badge.svg?branch=master)](https://coveralls.io/github/IoBuilders/payoutable-token?branch=master)
 [![npm](https://img.shields.io/npm/v/eip2021.svg)](https://www.npmjs.com/package/eip2021)
 
 This is the reference implementation of [EIP-2021 Payoutable token](https://github.com/ethereum/EIPs/pull/2021/files). This implementation will change over time with the standard and is not stable at the moment.
@@ -63,6 +63,42 @@ contract MyPayoutable is Payoutable {
 ```
 
 > You need an ethereum development framework for the above import statements to work! Check out these guides for [Truffle], [Embark] or [Buidler].
+
+## Payment information
+
+Whenever a payout is ordered, payment information has to be provided with the necessary information for the off-chain transfer. [EIP-2021](https://github.com/ethereum/EIPs/pull/2021/files) leaves the structure of this information up to the implementer, but recommends [ISO-20022](https://en.wikipedia.org/wiki/ISO_20022) as a starting point.
+
+The unit tests use a JSON version of this standard, which can be seem below.
+
+```json
+{
+    "CstmrCdtTrfInitn": {
+        "GrpHdr": {
+            "MsgId": "Test-Msg-ID"
+        },
+        "PmtInf": {
+            "PmtInfId": "Test-Payment-Information-ID",
+            "NbOfTxs": 1,
+            "CdtTrfTxInf": {
+                "EndToEndId": "Test-End-to-End-Id",
+                "RmtInf": {
+                    "Ustrd": "Payout from Payoutable Token"
+                },
+                "Cdtr": {
+                    "Nm": "John Doe"
+                },
+                "CdtrAcct": {
+                    "Id": {
+                        "IBAN": "ES45 1164 7521 6816 2674 2740"
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+Amongst other things, if defines the name of the bank account holder, an IBAN account and remittance information. Additionally some IDs are defined to properly mark the transfer.
 
 ## Tests
 
