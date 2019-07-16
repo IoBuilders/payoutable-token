@@ -1,0 +1,41 @@
+{
+  "name": "eip2021",
+  "version": "1.0.0",
+  "description": "An extension to the ERC-20 standard token that allows Token wallet owners to request payout from their wallet, by calling the smart contract and attaching a payout instruction string.",
+  "main": "truffle-config.js",
+  "dependencies": {
+    "eip1996": "^1.0.4"
+  },
+  "devDependencies": {
+    "ethlint": "^1.2.4",
+    "ganache-cli": "^6.4.5",
+    "randomstring": "^1.1.5",
+    "solc": "0.5.10",
+    "solidity-coverage": "^0.6.0",
+    "truffle": "^5.0.27",
+    "truffle-assertions": "^0.9.1"
+  },
+  "scripts": {
+    "coverage": "solidity-coverage",
+    "lint": "solium -d contracts",
+    "test": "scripts/executeTests.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IoBuilders/payoutable-token.git"
+  },
+  "keywords": [
+    "eip",
+    "erc",
+    "payoutable",
+    "solidity",
+    "ethereum",
+    "eth"
+  ],
+  "author": "tech@io.builders",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/IoBuilders/payoutable-token/issues"
+  },
+  "homepage": "https://github.com/IoBuilders/payoutable-token#readme"
+}

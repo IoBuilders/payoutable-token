@@ -1,0 +1,10 @@
+@startuml
+UserA -> "Payoutable Token": orderPayout
+"Payoutable Token" -> "Payout Agent": PayoutOrdered
+"Payout Agent" -> "Payoutable Token": transferPayoutToSuspenseAccount
+UserA -> "Suspense Account": transfer
+"Payoutable Token" -> UserA: PayoutFundsInSuspense
+"Payout Agent" -> "Payoutable Token": executePayout
+"Suspense Account" -> "UserA bank account": transfer
+"Payoutable Token" -> UserA: PayoutExecuted
+@enduml
