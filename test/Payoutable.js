@@ -5,29 +5,14 @@ const Payoutable = artifacts.require('PayoutableMock');
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const PAYOUT_INSTRUCTION = '{\n' +
-    '    "CstmrCdtTrfInitn": {\n' +
-    '        "GrpHdr": {\n' +
-    '            "MsgId": "Test-Msg-ID"\n' +
-    '        },\n' +
-    '        "PmtInf": {\n' +
-    '            "PmtInfId": "Test-Payment-Information-ID",\n' +
-    '            "NbOfTxs": 1,\n' +
-    '            "CdtTrfTxInf": {\n' +
-    '                "EndToEndId": "Test-End-to-End-Id",\n' +
-    '                "RmtInf": {\n' +
-    '                    "Ustrd": "Payout from Payoutable Token"\n' +
-    '                },\n' +
-    '                "Cdtr": {\n' +
-    '                    "Nm": "John Doe"\n' +
-    '                },\n' +
-    '                "CdtrAcct": {\n' +
-    '                    "Id": {\n' +
-    '                        "IBAN": "ES45 1164 7521 6816 2674 2740"\n' +
-    '                    }\n' +
-    '                }\n' +
-    '            }\n' +
+    '    "messageId": "Example Message ID",\n' +
+    '    "payouts": [\n' +
+    '        {\n' +
+    '            "amount": 1.00,\n' +
+    '            "bankAccountId": "caaa2bd3-dc42-436a-b70b-d1d7dac23741",\n' +
+    '            "remittanceInformation": "Example Remittance Information"\n' +
     '        }\n' +
-    '    }\n' +
+    '    ]\n' +
     '}';
 
 const STATUS_ORDERED = 1;

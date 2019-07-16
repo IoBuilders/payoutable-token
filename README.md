@@ -72,29 +72,14 @@ The unit tests use a JSON version of this standard, which can be seem below.
 
 ```json
 {
-    "CstmrCdtTrfInitn": {
-        "GrpHdr": {
-            "MsgId": "Test-Msg-ID"
-        },
-        "PmtInf": {
-            "PmtInfId": "Test-Payment-Information-ID",
-            "NbOfTxs": 1,
-            "CdtTrfTxInf": {
-                "EndToEndId": "Test-End-to-End-Id",
-                "RmtInf": {
-                    "Ustrd": "Payout from Payoutable Token"
-                },
-                "Cdtr": {
-                    "Nm": "John Doe"
-                },
-                "CdtrAcct": {
-                    "Id": {
-                        "IBAN": "ES45 1164 7521 6816 2674 2740"
-                    }
-                }
-            }
+    "messageId": "Example Message ID",
+    "payouts": [
+        {
+            "amount": 1.00,
+            "bankAccountId": "caaa2bd3-dc42-436a-b70b-d1d7dac23741",
+            "remittanceInformation": "Example Remittance Information"
         }
-    }
+    ]
 }
 ```
 
