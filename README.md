@@ -83,7 +83,7 @@ The unit tests use a JSON version of this standard, which can be seem below.
 }
 ```
 
-Amongst other things, if defines the name of the bank account holder, an IBAN account and remittance information. Additionally some IDs are defined to properly mark the transfer.
+Amongst other things, if defines the transferred amount, an IBAN account and remittance information. Additionally an ID is defined to properly mark the transfer.
 
 ## Tests
 
