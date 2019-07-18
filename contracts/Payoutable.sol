@@ -110,7 +110,8 @@ contract Payoutable is IPayoutable, Holdable {
 
         Hold storage inSuspenseHold = holds[operationIdHash];
 
-        _executeHold(operationId, inSuspenseHold.value);
+        super._setHoldToExecuted(operationId, inSuspenseHold.value);
+        super._transfer(inSuspenseHold.origin, inSuspenseHold.target, inSuspenseHold.value);
 
         inSuspensePayout.status = PayoutStatusCode.FundsInSuspense;
 

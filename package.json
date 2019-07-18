@@ -1,17 +1,17 @@
 {
   "name": "eip2021",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "An extension to the ERC-20 standard token that allows Token wallet owners to request payout from their wallet, by calling the smart contract and attaching a payout instruction string.",
   "main": "truffle-config.js",
   "dependencies": {
-    "eip1996": "^1.0.4"
+    "eip1996": "^1.0.5"
   },
   "devDependencies": {
     "ethlint": "^1.2.4",
-    "ganache-cli": "^6.4.5",
+    "ganache-cli": "^6.5.0",
     "randomstring": "^1.1.5",
     "solc": "0.5.10",
-    "solidity-coverage": "^0.6.0",
+    "solidity-coverage": "^0.6.3",
     "truffle": "^5.0.27",
     "truffle-assertions": "^0.9.1"
   },
